@@ -85,6 +85,17 @@ async function processDocxFile(buffer: Buffer): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check content length
+    const contentLength = request.headers.get('content-length');
+    const maxSize = 50 * 1024 * 1024; // 50MB limit
+
+    if (contentLength && parseInt(contentLength) > maxSize) {
+      return NextResponse.json(
+        { error: 'Request too large. Maximum size is 50MB.' },
+        { status: 413 }
+      );
+    }
+
     const formData = await request.formData();
     const results = [];
 
@@ -101,6 +112,19 @@ export async function POST(request: NextRequest) {
       if (key.startsWith('file-') && value instanceof File) {
         try {
           const file = value as File;
+
+          // Check individual file size (10MB limit per file)
+          const maxFileSize = 10 * 1024 * 1024; // 10MB
+          if (file.size > maxFileSize) {
+            results.push({
+              originalName: file.name,
+              cleanedUrl: '',
+              status: 'error' as const,
+              error: `File too large: ${file.name}. Maximum size is 10MB per file.`
+            });
+            continue;
+          }
+
           const buffer = Buffer.from(await file.arrayBuffer());
           
           let cleanedContent: string;

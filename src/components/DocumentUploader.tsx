@@ -14,16 +14,39 @@ interface DocumentUploaderProps {
   isProcessing: boolean;
 }
 
-export default function DocumentUploader({ 
-  onProcessingStart, 
-  onProcessingComplete, 
-  isProcessing 
+export default function DocumentUploader({
+  onProcessingStart,
+  onProcessingComplete,
+  isProcessing
 }: DocumentUploaderProps) {
   const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string>('');
+
+  // Maximum file size: 10MB (Vercel has a 4.5MB limit for serverless functions)
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const MAX_TOTAL_SIZE = 25 * 1024 * 1024; // 25MB total
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    setError('');
+
+    // Validate individual file sizes
+    const oversizedFiles = acceptedFiles.filter(file => file.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      setError(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size is 10MB per file.`);
+      return;
+    }
+
+    // Validate total size
+    const currentTotalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const newTotalSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
+
+    if (currentTotalSize + newTotalSize > MAX_TOTAL_SIZE) {
+      setError('Total file size exceeds 25MB limit. Please select fewer or smaller files.');
+      return;
+    }
+
     setFiles(prev => [...prev, ...acceptedFiles]);
-  }, []);
+  }, [files]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -37,6 +60,7 @@ export default function DocumentUploader({
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+    setError(''); // Clear error when removing files
   };
 
   const processFiles = async () => {
@@ -56,25 +80,50 @@ export default function DocumentUploader({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to process documents');
+        let errorMessage = 'Failed to process documents';
+
+        if (response.status === 413) {
+          errorMessage = 'File(s) too large. Please try smaller files (max 10MB per file, 25MB total).';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        } else if (response.status === 400) {
+          errorMessage = 'Invalid file format. Please check your files.';
+        }
+
+        throw new Error(errorMessage);
       }
 
       const results = await response.json();
       onProcessingComplete(results);
       setFiles([]); // Clear files after processing
+      setError(''); // Clear any previous errors
     } catch (error) {
       console.error('Error processing files:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process documents. Please try again.';
       onProcessingComplete([{
         originalName: 'Error',
         cleanedUrl: '',
         status: 'error',
-        error: 'Failed to process documents. Please try again.'
+        error: errorMessage
       }]);
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="text-red-400 text-xl mr-3">⚠️</div>
+            <div>
+              <h3 className="text-sm font-medium text-red-800">Upload Error</h3>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload Area */}
       <div
         {...getRootProps()}
