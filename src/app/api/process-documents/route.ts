@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import pdfParse from 'pdf-parse';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const mammoth = require('mammoth');
 
 // Arabic text removal utility
 class ArabicTextRemover {
@@ -64,6 +61,8 @@ async function processTxtFile(buffer: Buffer): Promise<string> {
 
 async function processPdfFile(buffer: Buffer): Promise<string> {
   try {
+    // Dynamic import to avoid build-time issues
+    const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(buffer);
     const remover = new ArabicTextRemover();
     return remover.cleanText(data.text);
@@ -74,6 +73,8 @@ async function processPdfFile(buffer: Buffer): Promise<string> {
 
 async function processDocxFile(buffer: Buffer): Promise<string> {
   try {
+    // Dynamic import to avoid build-time issues
+    const mammoth = await import('mammoth');
     const result = await mammoth.extractRawText({ buffer });
     const remover = new ArabicTextRemover();
     return remover.cleanText(result.value);
