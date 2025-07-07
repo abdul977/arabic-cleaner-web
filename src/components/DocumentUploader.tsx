@@ -3,14 +3,21 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 
+interface ProcessingResult {
+  originalName: string;
+  cleanedUrl?: string;
+  zipUrl?: string;
+  status: 'success' | 'error';
+  error?: string;
+  isLargeFile?: boolean;
+  chunks?: number;
+  wordCount?: number;
+  fileSizeMB?: number;
+}
+
 interface DocumentUploaderProps {
   onProcessingStart: () => void;
-  onProcessingComplete: (results: Array<{
-    originalName: string;
-    cleanedUrl: string;
-    status: 'success' | 'error';
-    error?: string;
-  }>) => void;
+  onProcessingComplete: (results: ProcessingResult[]) => void;
   isProcessing: boolean;
 }
 
@@ -22,9 +29,10 @@ export default function DocumentUploader({
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string>('');
 
-  // Maximum file size: 10MB (Vercel has a 4.5MB limit for serverless functions)
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const MAX_TOTAL_SIZE = 25 * 1024 * 1024; // 25MB total
+  // Updated file size limits for large file processing
+  const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file
+  const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB total
+  const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB threshold for large file processing
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError('');
@@ -32,7 +40,7 @@ export default function DocumentUploader({
     // Validate individual file sizes
     const oversizedFiles = acceptedFiles.filter(file => file.size > MAX_FILE_SIZE);
     if (oversizedFiles.length > 0) {
-      setError(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size is 10MB per file.`);
+      setError(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size is ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB per file.`);
       return;
     }
 
@@ -41,7 +49,7 @@ export default function DocumentUploader({
     const newTotalSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
 
     if (currentTotalSize + newTotalSize > MAX_TOTAL_SIZE) {
-      setError('Total file size exceeds 25MB limit. Please select fewer or smaller files.');
+      setError(`Total file size exceeds ${Math.round(MAX_TOTAL_SIZE / (1024 * 1024))}MB limit. Please select fewer or smaller files.`);
       return;
     }
 
@@ -61,6 +69,18 @@ export default function DocumentUploader({
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
     setError(''); // Clear error when removing files
+  };
+
+  const isLargeFile = (file: File) => {
+    return file.size > LARGE_FILE_THRESHOLD;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const processFiles = async () => {
@@ -83,7 +103,7 @@ export default function DocumentUploader({
         let errorMessage = 'Failed to process documents';
 
         if (response.status === 413) {
-          errorMessage = 'File(s) too large. Please try smaller files (max 10MB per file, 25MB total).';
+          errorMessage = `File(s) too large. Please try smaller files (max ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB per file, ${Math.round(MAX_TOTAL_SIZE / (1024 * 1024))}MB total).`;
         } else if (response.status === 500) {
           errorMessage = 'Server error. Please try again later.';
         } else if (response.status === 400) {
@@ -158,26 +178,42 @@ export default function DocumentUploader({
           </h3>
           <div className="space-y-2">
             {files.map((file, index) => (
-              <div 
+              <div
                 key={index}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                className={`flex items-center justify-between p-3 rounded-lg ${
+                  isLargeFile(file)
+                    ? 'bg-amber-50 border border-amber-200'
+                    : 'bg-gray-50'
+                }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="text-2xl">
-                    {file.type.includes('pdf') ? '📄' : 
+                    {file.type.includes('pdf') ? '📄' :
                      file.type.includes('word') ? '📝' : '📄'}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-gray-900">{file.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
+                    <div className="flex items-center space-x-2">
+                      <p className="text-sm text-gray-500">
+                        {formatFileSize(file.size)}
+                      </p>
+                      {isLargeFile(file) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                          Large File
+                        </span>
+                      )}
+                    </div>
+                    {isLargeFile(file) && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Will be processed in chunks for optimal performance
+                      </p>
+                    )}
                   </div>
                 </div>
                 {!isProcessing && (
                   <button
                     onClick={() => removeFile(index)}
-                    className="text-red-500 hover:text-red-700 p-1"
+                    className="text-red-500 hover:text-red-700 p-1 ml-2"
                   >
                     ✕
                   </button>
