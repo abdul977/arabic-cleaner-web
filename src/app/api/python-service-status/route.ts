@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { pythonServiceClient } from '@/lib/python-service-client';
 
 export async function GET() {

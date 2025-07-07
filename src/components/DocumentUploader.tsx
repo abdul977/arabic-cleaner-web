@@ -89,7 +89,7 @@ export default function DocumentUploader({
     }
 
     setFiles(prev => [...prev, ...acceptedFiles]);
-  }, [files, pythonServiceStatus, getEffectiveLimits]);
+  }, [files, getEffectiveLimits]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
