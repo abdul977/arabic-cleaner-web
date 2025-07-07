@@ -33,16 +33,23 @@ app = FastAPI(
 )
 
 # Configure CORS for Next.js integration
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,https://*.vercel.app"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://*.vercel.app"],  # Add your domains
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global chunker instance
-chunker = DocumentChunker(chunk_size_words=10000, overlap_words=100)
+# Global chunker instance with configurable parameters
+default_chunk_size = int(os.getenv("DEFAULT_CHUNK_SIZE_WORDS", "10000"))
+default_overlap = int(os.getenv("DEFAULT_OVERLAP_WORDS", "100"))
+chunker = DocumentChunker(chunk_size_words=default_chunk_size, overlap_words=default_overlap)
 
 # Temporary directory for file processing
 TEMP_DIR = Path(tempfile.gettempdir()) / "document_chunker"

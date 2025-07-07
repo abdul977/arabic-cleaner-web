@@ -22,16 +22,20 @@ RUN python -c "import nltk; nltk.download('punkt', quiet=True)"
 # Copy application code
 COPY . .
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
 USER app
 
-# Expose port
+# Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Health check
+# Health check using PORT environment variable
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+    CMD python -c "import requests, os; requests.get(f'http://localhost:{os.getenv(\"PORT\", \"8000\")}/health')" || exit 1
 
-# Start the service
-CMD ["uvicorn", "api_service:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the service using the Python script that handles PORT env var
+# Alternative: CMD ["./start.sh"]
+CMD ["python", "start_service.py"]
