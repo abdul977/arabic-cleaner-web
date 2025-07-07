@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pythonServiceClient } from '@/lib/python-service-client';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const isAvailable = await pythonServiceClient.isServiceAvailable();
     
