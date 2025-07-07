@@ -10,6 +10,11 @@ A modern web application that removes Arabic text and symbols from documents whi
 - 🚀 **Fast Processing**: Quick document processing with real-time feedback
 - 📱 **Responsive Design**: Works on desktop and mobile devices
 - ☁️ **Cloud-Based**: No software installation required
+- 📊 **Large File Support**: Handle documents up to 500MB with intelligent chunking
+- 🔧 **Smart Chunking**: Automatically split large documents while preserving word boundaries
+- 🐍 **Python Integration**: Advanced document processing with Python microservice
+- 📦 **Batch Processing**: Process multiple files simultaneously
+- 💾 **Multiple Output Formats**: Download individual chunks or merged files
 
 ## Supported File Types
 
@@ -19,17 +24,31 @@ A modern web application that removes Arabic text and symbols from documents whi
 
 ## How It Works
 
-1. **Upload**: Drag and drop or select your documents
-2. **Process**: The application analyzes and removes Arabic text
-3. **Download**: Get your cleaned documents instantly
+1. **Upload**: Drag and drop or select your documents (up to 500MB per file)
+2. **Smart Processing**:
+   - Small files (< 10MB): Processed directly in the browser
+   - Large files (≥ 10MB): Automatically chunked using Python service
+3. **Intelligent Chunking**: Large documents are split into 10,000-word chunks while preserving:
+   - Word boundaries (no words are broken)
+   - Document structure and formatting
+   - Paragraph integrity
+4. **Arabic Text Removal**: Each chunk is processed to remove Arabic content
+5. **Download Options**:
+   - Individual chunk files
+   - Merged cleaned document
+   - ZIP archive with all chunks
 
 ## Technology Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes
-- **Document Processing**: pdf-parse, mammoth, custom Arabic text detection
-- **Deployment**: Vercel
-- **File Handling**: react-dropzone, multer
+- **Backend**: Next.js API Routes + Python FastAPI microservice
+- **Document Processing**:
+  - JavaScript: pdf-parse, mammoth, custom Arabic text detection
+  - Python: PyPDF2, pdfplumber, python-docx, NLTK
+- **Large File Processing**: Python-based chunking service with intelligent text splitting
+- **Deployment**: Vercel (Next.js) + Railway/Heroku (Python service)
+- **File Handling**: react-dropzone, multer, aiofiles
+- **API Integration**: Custom TypeScript client for Python service communication
 
 ## Getting Started
 

@@ -1,0 +1,6 @@
+[ ] NAME:Current Task List DESCRIPTION:Root task for conversation __NEW_AGENT__
+-[x] NAME:Create Python document chunking service DESCRIPTION:Implement a Python script that can read large documents, split them into 10,000-word chunks while preserving word boundaries and document structure, and handle multiple file formats (PDF, DOCX, TXT).
+-[x] NAME:Set up Python service API endpoint DESCRIPTION:Create a Flask/FastAPI service that exposes the chunking functionality as a REST API that can be called from the Next.js application.
+-[x] NAME:Integrate Python service with Next.js backend DESCRIPTION:Modify the existing Next.js API route to call the Python service for large file processing before applying the current size limits.
+-[x] NAME:Update frontend to handle chunked processing DESCRIPTION:Enhance the DocumentUploader component to show progress for chunked processing and handle the new workflow.
+-[x] NAME:Add configuration and deployment setup DESCRIPTION:Create configuration files, requirements.txt, and documentation for deploying the Python service alongside the Next.js application.

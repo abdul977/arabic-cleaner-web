@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 interface ProcessingResult {
@@ -28,19 +28,52 @@ export default function DocumentUploader({
 }: DocumentUploaderProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string>('');
+  const [pythonServiceStatus, setPythonServiceStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
 
-  // Updated file size limits for large file processing
-  const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per file
-  const MAX_TOTAL_SIZE = 200 * 1024 * 1024; // 200MB total
+  // Dynamic file size limits based on Python service availability
+  const MAX_FILE_SIZE_WITH_PYTHON = 500 * 1024 * 1024; // 500MB per file with Python service
+  const MAX_FILE_SIZE_WITHOUT_PYTHON = 100 * 1024 * 1024; // 100MB per file without Python service
+  const MAX_TOTAL_SIZE_WITH_PYTHON = 1000 * 1024 * 1024; // 1GB total with Python service
+  const MAX_TOTAL_SIZE_WITHOUT_PYTHON = 200 * 1024 * 1024; // 200MB total without Python service
   const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB threshold for large file processing
+
+  // Get effective limits based on Python service status
+  const getEffectiveLimits = () => {
+    const isPythonAvailable = pythonServiceStatus === 'available';
+    return {
+      maxFileSize: isPythonAvailable ? MAX_FILE_SIZE_WITH_PYTHON : MAX_FILE_SIZE_WITHOUT_PYTHON,
+      maxTotalSize: isPythonAvailable ? MAX_TOTAL_SIZE_WITH_PYTHON : MAX_TOTAL_SIZE_WITHOUT_PYTHON,
+      isPythonAvailable
+    };
+  };
+
+  // Check Python service status on component mount
+  const checkPythonServiceStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/python-service-status');
+      const data = await response.json();
+      setPythonServiceStatus(data.available ? 'available' : 'unavailable');
+    } catch (error) {
+      console.warn('Failed to check Python service status:', error);
+      setPythonServiceStatus('unavailable');
+    }
+  }, []);
+
+  // Check service status on mount
+  useEffect(() => {
+    checkPythonServiceStatus();
+  }, [checkPythonServiceStatus]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError('');
+    const limits = getEffectiveLimits();
 
     // Validate individual file sizes
-    const oversizedFiles = acceptedFiles.filter(file => file.size > MAX_FILE_SIZE);
+    const oversizedFiles = acceptedFiles.filter(file => file.size > limits.maxFileSize);
     if (oversizedFiles.length > 0) {
-      setError(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size is ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB per file.`);
+      const maxSizeMB = Math.round(limits.maxFileSize / (1024 * 1024));
+      const serviceInfo = limits.isPythonAvailable ? 'with enhanced processing' : 'without enhanced processing';
+      setError(`Files too large: ${oversizedFiles.map(f => f.name).join(', ')}. Maximum size is ${maxSizeMB}MB per file ${serviceInfo}.`);
       return;
     }
 
@@ -48,13 +81,15 @@ export default function DocumentUploader({
     const currentTotalSize = files.reduce((sum, file) => sum + file.size, 0);
     const newTotalSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
 
-    if (currentTotalSize + newTotalSize > MAX_TOTAL_SIZE) {
-      setError(`Total file size exceeds ${Math.round(MAX_TOTAL_SIZE / (1024 * 1024))}MB limit. Please select fewer or smaller files.`);
+    if (currentTotalSize + newTotalSize > limits.maxTotalSize) {
+      const maxTotalMB = Math.round(limits.maxTotalSize / (1024 * 1024));
+      const serviceInfo = limits.isPythonAvailable ? 'with enhanced processing' : 'without enhanced processing';
+      setError(`Total file size exceeds ${maxTotalMB}MB limit ${serviceInfo}. Please select fewer or smaller files.`);
       return;
     }
 
     setFiles(prev => [...prev, ...acceptedFiles]);
-  }, [files]);
+  }, [files, pythonServiceStatus]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -103,7 +138,23 @@ export default function DocumentUploader({
         let errorMessage = 'Failed to process documents';
 
         if (response.status === 413) {
-          errorMessage = `File(s) too large. Please try smaller files (max ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB per file, ${Math.round(MAX_TOTAL_SIZE / (1024 * 1024))}MB total).`;
+          try {
+            const errorData = await response.json();
+            if (errorData.pythonServiceAvailable !== undefined) {
+              const limits = getEffectiveLimits();
+              const maxFileMB = Math.round(limits.maxFileSize / (1024 * 1024));
+              const maxTotalMB = Math.round(limits.maxTotalSize / (1024 * 1024));
+              const serviceInfo = limits.isPythonAvailable ? 'with enhanced processing' : 'without enhanced processing';
+              errorMessage = `File(s) too large. Please try smaller files (max ${maxFileMB}MB per file, ${maxTotalMB}MB total ${serviceInfo}).`;
+            } else {
+              errorMessage = errorData.error || 'File(s) too large. Please try smaller files.';
+            }
+          } catch {
+            const limits = getEffectiveLimits();
+            const maxFileMB = Math.round(limits.maxFileSize / (1024 * 1024));
+            const maxTotalMB = Math.round(limits.maxTotalSize / (1024 * 1024));
+            errorMessage = `File(s) too large. Please try smaller files (max ${maxFileMB}MB per file, ${maxTotalMB}MB total).`;
+          }
         } else if (response.status === 500) {
           errorMessage = 'Server error. Please try again later.';
         } else if (response.status === 400) {
@@ -131,6 +182,38 @@ export default function DocumentUploader({
 
   return (
     <div className="space-y-6">
+      {/* Python Service Status Indicator */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">Enhanced Processing Status:</span>
+          <div className="flex items-center space-x-2">
+            {pythonServiceStatus === 'checking' && (
+              <>
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-yellow-600">Checking...</span>
+              </>
+            )}
+            {pythonServiceStatus === 'available' && (
+              <>
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-sm text-green-600">Available (up to 500MB per file)</span>
+              </>
+            )}
+            {pythonServiceStatus === 'unavailable' && (
+              <>
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <span className="text-sm text-red-600">Unavailable (up to 100MB per file)</span>
+              </>
+            )}
+          </div>
+        </div>
+        {pythonServiceStatus === 'unavailable' && (
+          <p className="text-xs text-gray-500 mt-1">
+            Enhanced processing service is offline. Large file processing will use fallback mode.
+          </p>
+        )}
+      </div>
+
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
